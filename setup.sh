@@ -14,10 +14,12 @@
 # - IP-Adressen Anzeige (public IPv4/IPv6, Tailscale)
 # - Hostname wird IMMER vor Tailscale konfiguriert
 #
-# Ausführung: 
-#   sudo ./setup.sh              # Normal
-#   DEBUG=1 sudo ./setup.sh      # Mit Debug-Ausgabe
-#   DRY_RUN=1 sudo ./setup.sh    # Test-Modus (keine Änderungen)
+# Ausführung:
+#   sudo ./setup.sh                                    # Normal
+#   DEBUG=1 sudo ./setup.sh                           # Mit Debug-Ausgabe
+#   DRY_RUN=1 sudo ./setup.sh                         # Test-Modus (keine Änderungen)
+#   TAILSCALE_KEY=tskey-... sudo ./setup.sh          # Mit Tailscale-Key
+#   KOMODO_PATH=/srv/komodo sudo ./setup.sh          # Eigener Komodo-Pfad
 # ==============================================================================
 
 # --- Globale Variablen ---
@@ -32,6 +34,10 @@ C_CYAN='\033[36m'
 DEBUG=${DEBUG:-0}
 DRY_RUN=${DRY_RUN:-0}
 LOGFILE="/var/log/server-setup.log"
+
+# Konfigurierbare Variablen
+TAILSCALE_KEY=${TAILSCALE_KEY:-}           # Tailscale Auth-Key (optional)
+KOMODO_PATH=${KOMODO_PATH:-/opt/komodo}    # Komodo Installation Path (default: /opt/komodo)
 
 # --- Hilfsfunktionen ---
 
@@ -434,18 +440,25 @@ install_tailscale() {
     echo -e "${C_YELLOW}  🔑 TAILSCALE AUTHENTIFIZIERUNG                  ${C_RESET}"
     echo -e "${C_YELLOW}═══════════════════════════════════════════════════${C_RESET}"
     echo ""
-    info "Erstellen Sie einen Auth-Key unter: https://login.tailscale.com/admin/settings/keys"
-    echo ""
-    info "Empfohlene Einstellungen:"
-    echo "  • Reusable: Ja"
-    echo "  • Ephemeral: Nein"
-    echo "  • Pre-authorized: Ja"
-    echo ""
-    
-    [ "$DRY_RUN" = "1" ] && warning "[DRY-RUN] Überspringe Tailscale-Authentifizierung" && return 0
-    
-    read -p "Tailscale Auth-Key eingeben (oder Enter zum Überspringen): " TAILSCALE_KEY
-    
+
+    # Prüfe ob Key bereits als Umgebungsvariable gesetzt ist
+    if [ -n "$TAILSCALE_KEY" ]; then
+        info "Tailscale-Key aus Umgebungsvariable erkannt"
+        info "Key: ${TAILSCALE_KEY:0:20}..." # Zeige nur die ersten 20 Zeichen
+    else
+        info "Erstellen Sie einen Auth-Key unter: https://login.tailscale.com/admin/settings/keys"
+        echo ""
+        info "Empfohlene Einstellungen:"
+        echo "  • Reusable: Ja"
+        echo "  • Ephemeral: Nein"
+        echo "  • Pre-authorized: Ja"
+        echo ""
+
+        [ "$DRY_RUN" = "1" ] && warning "[DRY-RUN] Überspringe Tailscale-Authentifizierung" && return 0
+
+        read -p "Tailscale Auth-Key eingeben (oder Enter zum Überspringen): " TAILSCALE_KEY
+    fi
+
     if [ -n "$TAILSCALE_KEY" ]; then
         info "Verbinde mit Tailscale-Netzwerk..."
         TAILSCALE_EXIT_NODE=""
@@ -473,19 +486,34 @@ install_tailscale() {
 
 setup_komodo_periphery() {
     info "🦎 Richte Komodo Periphery ein..."
-    
+
     if ! command -v docker >/dev/null 2>&1; then
         error "Docker ist nicht installiert. Bitte installiere Docker zuerst."
         return 1
     fi
-    
-    if [ -f /opt/komodo/docker-compose.yml ]; then
-        warning "Komodo Periphery ist bereits konfiguriert."
+
+    # Zeige konfigurierten Pfad an
+    info "Komodo Installationspfad: $KOMODO_PATH"
+
+    # Frage nach eigenem Pfad, falls nicht über Umgebungsvariable gesetzt
+    if [ "$KOMODO_PATH" = "/opt/komodo" ] && [ "$DRY_RUN" != "1" ]; then
+        echo ""
+        if confirm "Möchten Sie einen anderen Installationspfad verwenden?"; then
+            read -p "Komodo Installationspfad eingeben [Standard: /opt/komodo]: " CUSTOM_KOMODO_PATH
+            if [ -n "$CUSTOM_KOMODO_PATH" ]; then
+                KOMODO_PATH="$CUSTOM_KOMODO_PATH"
+                info "Verwende benutzerdefinierten Pfad: $KOMODO_PATH"
+            fi
+        fi
+    fi
+
+    if [ -f "$KOMODO_PATH/docker-compose.yml" ]; then
+        warning "Komodo Periphery ist bereits konfiguriert in: $KOMODO_PATH"
         confirm "Konfiguration überschreiben?" || return 0
     fi
-    
-    info "Erstelle /opt/komodo Verzeichnis..."
-    [ "$DRY_RUN" != "1" ] && mkdir -p /opt/komodo && chmod 755 /opt/komodo || debug "[DRY-RUN] Would create /opt/komodo"
+
+    info "Erstelle Komodo-Verzeichnis: $KOMODO_PATH"
+    [ "$DRY_RUN" != "1" ] && mkdir -p "$KOMODO_PATH" && chmod 755 "$KOMODO_PATH" || debug "[DRY-RUN] Would create $KOMODO_PATH"
     
     local tailscale_ip=""
     if command -v tailscale >/dev/null 2>&1; then
@@ -498,7 +526,7 @@ setup_komodo_periphery() {
     
     info "Erstelle docker-compose.yml..."
     if [ "$DRY_RUN" != "1" ]; then
-        cat > /opt/komodo/docker-compose.yml << EOF
+        cat > "$KOMODO_PATH/docker-compose.yml" << EOF
 # docker-compose.yml - Komodo Periphery
 
 services:
@@ -521,30 +549,30 @@ EOF
     else
         debug "[DRY-RUN] Would create docker-compose.yml"
     fi
-    
+
     info "Erstelle .env Konfiguration..."
     if [ "$DRY_RUN" != "1" ]; then
-        cat > /opt/komodo/.env << EOF
+        cat > "$KOMODO_PATH/.env" << EOF
 # .env - Komodo Periphery Konfiguration
 
 COMPOSE_KOMODO_IMAGE_TAG=latest
-PERIPHERY_ROOT_DIRECTORY=/opt/komodo
+PERIPHERY_ROOT_DIRECTORY=$KOMODO_PATH
 PERIPHERY_PASSKEYS=${passkey}
 PERIPHERY_SSL_ENABLED=true
 PERIPHERY_DISABLE_TERMINALS=false
 EOF
-        chmod 600 /opt/komodo/.env
+        chmod 600 "$KOMODO_PATH/.env"
         success ".env Konfiguration erstellt"
     else
         debug "[DRY-RUN] Would create .env"
     fi
-    
+
     echo ""
     echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
     echo -e "${C_CYAN}    🦎 KOMODO PERIPHERY KONFIGURATION           ${C_RESET}"
     echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
     echo ""
-    echo -e "${C_BLUE}📁 Installation:${C_RESET} /opt/komodo/"
+    echo -e "${C_BLUE}📁 Installation:${C_RESET} $KOMODO_PATH/"
     echo -e "${C_BLUE}🔌 Port:${C_RESET} ${tailscale_ip}:8120"
     echo -e "${C_BLUE}🔑 Passkey:${C_RESET} ${C_GREEN}${passkey}${C_RESET}"
     echo ""
@@ -552,14 +580,14 @@ EOF
     echo ""
     echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
     echo ""
-    
-    log_action "KOMODO" "Periphery configured at /opt/komodo/"
+
+    log_action "KOMODO" "Periphery configured at $KOMODO_PATH/"
     log_action "KOMODO" "Passkey: ${passkey}"
-    
+
     if confirm "Komodo Periphery jetzt starten?"; then
         info "Starte Komodo Periphery..."
         if [ "$DRY_RUN" != "1" ]; then
-            cd /opt/komodo
+            cd "$KOMODO_PATH"
             docker compose pull
             docker compose up -d
             sleep 3
@@ -568,7 +596,7 @@ EOF
             debug "[DRY-RUN] Would start Komodo"
         fi
     else
-        info "Später starten mit: cd /opt/komodo && docker compose up -d"
+        info "Später starten mit: cd $KOMODO_PATH && docker compose up -d"
     fi
     
     return 0

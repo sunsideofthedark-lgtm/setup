@@ -86,6 +86,45 @@ sudo ./setup.sh
 # Mit Umgebungsvariablen
 DEBUG=1 sudo ./setup.sh
 DRY_RUN=1 sudo ./setup.sh
+
+# Mit Tailscale-Key (keine interaktive Eingabe nötig)
+TAILSCALE_KEY=tskey-auth-XXXXX-YYYYY sudo ./setup.sh
+
+# Mit eigenem Komodo-Pfad (statt /opt/komodo)
+KOMODO_PATH=/srv/komodo sudo ./setup.sh
+
+# Alle kombiniert
+TAILSCALE_KEY=tskey-auth-XXX KOMODO_PATH=/srv/komodo DEBUG=1 sudo ./setup.sh
+```
+
+## ⚙️ Konfiguration über Umgebungsvariablen
+
+Das Skript unterstützt folgende Umgebungsvariablen für automatisierte Setups:
+
+| Variable | Beschreibung | Standard | Beispiel |
+|----------|-------------|----------|----------|
+| `DEBUG` | Debug-Ausgabe aktivieren | `0` | `DEBUG=1` |
+| `DRY_RUN` | Test-Modus (keine Änderungen) | `0` | `DRY_RUN=1` |
+| `TAILSCALE_KEY` | Tailscale Auth-Key | (leer) | `TAILSCALE_KEY=tskey-auth-XXX` |
+| `KOMODO_PATH` | Komodo Installationspfad | `/opt/komodo` | `KOMODO_PATH=/srv/komodo` |
+
+### Beispiele
+
+```bash
+# Vollautomatisches Setup mit Tailscale
+TAILSCALE_KEY=tskey-auth-k1234567CNTRL-ABCDEFGH sudo ./setup.sh
+
+# Mit eigenem Komodo-Pfad
+KOMODO_PATH=/srv/komodo sudo ./setup.sh
+
+# Alles kombiniert für CI/CD
+TAILSCALE_KEY=tskey-auth-XXX \
+KOMODO_PATH=/home/deploy/komodo \
+DEBUG=1 \
+sudo ./setup.sh
+
+# Dry-Run zum Testen
+DRY_RUN=1 TAILSCALE_KEY=tskey-auth-XXX sudo ./setup.sh
 ```
 
 ## 📖 Verwendung
@@ -131,15 +170,24 @@ sudo ./start.sh
    - ❌ **Ephemeral**: Nein (Server bleibt im Netzwerk)
    - 📝 **Tags**: Optional (z.B. `tag:server`)
 
-2. **Bei Setup-Ausführung**:
+2. **Auth-Key übergeben** (zwei Methoden):
+
+   **Methode 1: Umgebungsvariable** (empfohlen für Automatisierung)
+   ```bash
+   TAILSCALE_KEY=tskey-auth-XXXXX-YYYYY sudo ./setup.sh
    ```
-   Tailscale Auth-Key eingeben: tskey-auth-XXXXX-YYYYY
+
+   **Methode 2: Interaktive Eingabe**
+   ```bash
+   sudo ./setup.sh
+   # → Skript fragt nach: "Tailscale Auth-Key eingeben: tskey-auth-XXXXX-YYYYY"
    ```
 
 3. **Automatische Konfiguration**:
    - Firewall-Port 41641/udp wird geöffnet
    - Optional: Exit-Node Konfiguration
    - Optional: Tailscale SSH aktivieren
+   - IP-Adressen werden automatisch angezeigt
 
 ### Nach der Installation
 
@@ -161,19 +209,37 @@ Das Skript richtet automatisch Komodo Periphery ein:
 
 ### Automatische Konfiguration
 
-- **Verzeichnis**: `/opt/komodo/`
+- **Verzeichnis**: `/opt/komodo/` (Standard) oder eigener Pfad
 - **Port**: `<tailscale-ip>:8120` (bindet an Tailscale-IP)
 - **Passkey**: Automatisch generiert und angezeigt
 - **Docker Compose**: Fertig konfiguriert
 - **SSL**: Aktiviert
 
+### Installationspfad konfigurieren
+
+**Methode 1: Umgebungsvariable** (empfohlen für Automatisierung)
+```bash
+# Eigener Pfad statt /opt/komodo
+KOMODO_PATH=/srv/komodo sudo ./setup.sh
+KOMODO_PATH=/home/admin/komodo sudo ./setup.sh
+```
+
+**Methode 2: Interaktive Eingabe**
+```bash
+sudo ./setup.sh
+# → Skript fragt: "Möchten Sie einen anderen Installationspfad verwenden?"
+# → Eingabe: /srv/komodo
+```
+
+**Hinweis**: Der Pfad wird automatisch erstellt, falls er nicht existiert.
+
 ### Wichtige Dateien
 
 ```
-/opt/komodo/
-├── docker-compose.yml    # Container-Konfiguration
-├── .env                  # Umgebungsvariablen (PASSKEY hier!)
-└── ...                   # Repos, Stacks, Builds
+$KOMODO_PATH/              # Ihr gewählter Pfad (z.B. /opt/komodo oder /srv/komodo)
+├── docker-compose.yml     # Container-Konfiguration
+├── .env                   # Umgebungsvariablen (PASSKEY hier!)
+└── ...                    # Repos, Stacks, Builds
 ```
 
 ### Passkey notieren!
@@ -189,8 +255,11 @@ Notieren Sie es für die Verbindung mit Komodo Core.
 ### Komodo starten/stoppen
 
 ```bash
-# Starten
+# Starten (passe /opt/komodo an deinen Pfad an)
 cd /opt/komodo && docker compose up -d
+
+# Mit Variable (wenn KOMODO_PATH gesetzt)
+cd $KOMODO_PATH && docker compose up -d
 
 # Stoppen
 cd /opt/komodo && docker compose down
@@ -200,6 +269,9 @@ cd /opt/komodo && docker compose logs -f
 
 # Status prüfen
 docker ps | grep komodo
+
+# Neustart
+cd /opt/komodo && docker compose restart
 ```
 
 ## 📡 IP-Adressen Anzeige
