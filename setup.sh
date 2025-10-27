@@ -35,11 +35,109 @@ DEBUG=${DEBUG:-0}
 DRY_RUN=${DRY_RUN:-0}
 LOGFILE="/var/log/server-setup.log"
 
-# Konfigurierbare Variablen
+# Konfigurierbare Variablen (können via ENV oder Command-line gesetzt werden)
 TAILSCALE_KEY=${TAILSCALE_KEY:-}           # Tailscale Auth-Key (optional)
 KOMODO_PATH=${KOMODO_PATH:-/opt/komodo}    # Komodo Installation Path (default: /opt/komodo)
+HOSTNAME_SET=${HOSTNAME_SET:-}             # Server Hostname (optional)
+SSH_PORT_SET=${SSH_PORT_SET:-}             # SSH Port (optional)
+SKIP_INTERACTIVE=${SKIP_INTERACTIVE:-0}    # Skip interactive prompts (0=false, 1=true)
 
 # --- Hilfsfunktionen ---
+
+# Help-Funktion
+show_help() {
+    cat << 'HELPEOF'
+Verwendung: ./setup.sh [OPTIONEN]
+
+Universelles Linux Server-Setup-Skript v3.0
+
+OPTIONEN:
+  -h, --help                    Diese Hilfe anzeigen
+  -d, --debug                   Debug-Modus aktivieren
+  -n, --dry-run                 Test-Modus (keine Änderungen)
+  -t, --tailscale-key KEY       Tailscale Auth-Key
+  -k, --komodo-path PATH        Komodo Installationspfad (Standard: /opt/komodo)
+  -H, --hostname NAME           Server Hostname
+  -p, --ssh-port PORT           SSH Port (1024-65535)
+  -y, --yes                     Automatisch "ja" zu allen Fragen (non-interactive)
+
+UMGEBUNGSVARIABLEN:
+  DEBUG=1                       Debug-Modus
+  DRY_RUN=1                     Test-Modus
+  TAILSCALE_KEY=tskey-...      Tailscale Auth-Key
+  KOMODO_PATH=/path            Komodo Installationspfad
+  HOSTNAME_SET=myserver        Server Hostname
+  SSH_PORT_SET=2222            SSH Port
+  SKIP_INTERACTIVE=1           Non-interactive Modus
+
+BEISPIELE:
+  # Interaktives Setup
+  sudo ./setup.sh
+
+  # Vollautomatisches Setup
+  sudo ./setup.sh --tailscale-key tskey-auth-XXX --komodo-path /srv/komodo --yes
+
+  # Mit allen Optionen
+  sudo ./setup.sh \
+    --tailscale-key tskey-auth-k1234567CNTRL-ABCD \
+    --komodo-path /srv/komodo \
+    --hostname myserver \
+    --ssh-port 2222 \
+    --yes
+
+  # Dry-Run zum Testen
+  sudo ./setup.sh --dry-run --tailscale-key tskey-auth-XXX
+
+  # Mit Umgebungsvariablen
+  TAILSCALE_KEY=tskey-auth-XXX KOMODO_PATH=/srv/komodo sudo ./setup.sh
+
+HELPEOF
+    exit 0
+}
+
+# Command-line Arguments parsen
+parse_arguments() {
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -h|--help)
+                show_help
+                ;;
+            -d|--debug)
+                DEBUG=1
+                shift
+                ;;
+            -n|--dry-run)
+                DRY_RUN=1
+                shift
+                ;;
+            -t|--tailscale-key)
+                TAILSCALE_KEY="$2"
+                shift 2
+                ;;
+            -k|--komodo-path)
+                KOMODO_PATH="$2"
+                shift 2
+                ;;
+            -H|--hostname)
+                HOSTNAME_SET="$2"
+                shift 2
+                ;;
+            -p|--ssh-port)
+                SSH_PORT_SET="$2"
+                shift 2
+                ;;
+            -y|--yes|--skip-interactive)
+                SKIP_INTERACTIVE=1
+                shift
+                ;;
+            *)
+                echo "Unbekannte Option: $1"
+                echo "Verwenden Sie --help für Hilfe"
+                exit 1
+                ;;
+        esac
+    done
+}
 
 dry_run() {
     local cmd="$@"
@@ -102,6 +200,10 @@ error() {
 confirm() {
     if [ "$DRY_RUN" = "1" ]; then
         echo -e "${C_MAGENTA}[DRY-RUN] Auto-confirming: $1${C_RESET}"
+        return 0
+    fi
+    if [ "$SKIP_INTERACTIVE" = "1" ]; then
+        echo -e "${C_GREEN}[AUTO] $1 → yes${C_RESET}"
         return 0
     fi
     while true; do
@@ -335,6 +437,12 @@ setup_firewall() {
             dry_run "ufw allow 443/tcp"
             dry_run "ufw allow 41641/udp"  # Tailscale
             dry_run "ufw allow 51820/udp"  # WireGuard
+
+            # Tailscale-Interface komplett öffnen (alle Ports)
+            info "Öffne Tailscale-Interface komplett (alle Ports für Docker-Kommunikation)"
+            dry_run "ufw allow in on tailscale0"
+            dry_run "ufw allow out on tailscale0"
+
             [ "$DRY_RUN" != "1" ] && echo "y" | ufw enable || debug "[DRY-RUN] Would enable UFW"
             ;;
         firewall-cmd)
@@ -347,6 +455,11 @@ setup_firewall() {
             dry_run "firewall-cmd --permanent --add-service=https"
             dry_run "firewall-cmd --permanent --add-port=41641/udp"
             dry_run "firewall-cmd --permanent --add-port=51820/udp"
+
+            # Tailscale-Interface komplett öffnen
+            info "Öffne Tailscale-Interface komplett (alle Ports für Docker-Kommunikation)"
+            dry_run "firewall-cmd --permanent --zone=trusted --add-interface=tailscale0"
+
             dry_run "firewall-cmd --reload"
             ;;
     esac
@@ -687,11 +800,29 @@ ZSHEOF
 
 # --- HAUPTSKRIPT ---
 
+# Pers Command-line Arguments (must be before setup_logging)
+parse_arguments "$@"
+
 setup_logging
 detect_os
 
 [ "$DEBUG" = "1" ] && debug "Debug-Modus aktiv"
 [ "$DRY_RUN" = "1" ] && warning "DRY-RUN MODUS - Keine echten Änderungen!"
+[ "$SKIP_INTERACTIVE" = "1" ] && info "Non-Interactive Modus aktiviert (--yes)"
+
+# Zeige erkannte Parameter
+if [ -n "$TAILSCALE_KEY" ]; then
+    debug "Tailscale-Key erkannt: ${TAILSCALE_KEY:0:20}..."
+fi
+if [ "$KOMODO_PATH" != "/opt/komodo" ]; then
+    debug "Komodo-Pfad: $KOMODO_PATH"
+fi
+if [ -n "$HOSTNAME_SET" ]; then
+    debug "Hostname: $HOSTNAME_SET"
+fi
+if [ -n "$SSH_PORT_SET" ]; then
+    debug "SSH-Port: $SSH_PORT_SET"
+fi
 
 if [ "$(id -u)" -ne 0 ]; then
     error "Dieses Skript muss mit root-Rechten (sudo) ausgeführt werden."

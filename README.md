@@ -80,21 +80,31 @@ sudo ./start.sh dry-run
 ### Direkte Ausführung
 
 ```bash
-# Normal
+# Normal (interaktiv)
 sudo ./setup.sh
 
-# Mit Umgebungsvariablen
-DEBUG=1 sudo ./setup.sh
-DRY_RUN=1 sudo ./setup.sh
+# Hilfe anzeigen
+sudo ./setup.sh --help
 
-# Mit Tailscale-Key (keine interaktive Eingabe nötig)
-TAILSCALE_KEY=tskey-auth-XXXXX-YYYYY sudo ./setup.sh
+# Mit Command-line Argumenten (EMPFOHLEN für Automatisierung!)
+sudo ./setup.sh \
+  --tailscale-key tskey-auth-k1234567CNTRL-ABCD \
+  --komodo-path /srv/komodo \
+  --hostname myserver \
+  --ssh-port 2222 \
+  --yes  # Keine interaktiven Fragen
 
-# Mit eigenem Komodo-Pfad (statt /opt/komodo)
-KOMODO_PATH=/srv/komodo sudo ./setup.sh
+# Kurz-Form
+sudo ./setup.sh -t tskey-auth-XXX -k /srv/komodo -H myserver -p 2222 -y
 
-# Alle kombiniert
-TAILSCALE_KEY=tskey-auth-XXX KOMODO_PATH=/srv/komodo DEBUG=1 sudo ./setup.sh
+# Dry-Run zum Testen
+sudo ./setup.sh --dry-run --tailscale-key tskey-auth-XXX
+
+# Mit Umgebungsvariablen (Alternative)
+TAILSCALE_KEY=tskey-auth-XXX KOMODO_PATH=/srv/komodo sudo ./setup.sh
+
+# Alles kombiniert (ENV + Args)
+TAILSCALE_KEY=tskey-auth-XXX DEBUG=1 sudo ./setup.sh --yes --hostname myserver
 ```
 
 ## ⚙️ Konfiguration über Umgebungsvariablen
@@ -107,6 +117,9 @@ Das Skript unterstützt folgende Umgebungsvariablen für automatisierte Setups:
 | `DRY_RUN` | Test-Modus (keine Änderungen) | `0` | `DRY_RUN=1` |
 | `TAILSCALE_KEY` | Tailscale Auth-Key | (leer) | `TAILSCALE_KEY=tskey-auth-XXX` |
 | `KOMODO_PATH` | Komodo Installationspfad | `/opt/komodo` | `KOMODO_PATH=/srv/komodo` |
+| `HOSTNAME_SET` | Server Hostname | (leer) | `HOSTNAME_SET=myserver` |
+| `SSH_PORT_SET` | SSH Port | (leer) | `SSH_PORT_SET=2222` |
+| `SKIP_INTERACTIVE` | Non-interactive Modus | `0` | `SKIP_INTERACTIVE=1` |
 
 ### Beispiele
 
@@ -185,9 +198,33 @@ sudo ./start.sh
 
 3. **Automatische Konfiguration**:
    - Firewall-Port 41641/udp wird geöffnet
+   - ✅ **Tailscale-Interface komplett geöffnet** (alle Ports!)
+   - ✅ **Docker kann über Tailscale kommunizieren**
    - Optional: Exit-Node Konfiguration
    - Optional: Tailscale SSH aktivieren
    - IP-Adressen werden automatisch angezeigt
+
+### Tailscale + Docker Integration
+
+Das Skript konfiguriert die Firewall so, dass:
+- **Alle Ports auf dem Tailscale-Interface (tailscale0) offen sind**
+- Docker-Container über Tailscale kommunizieren können
+- Komodo Periphery über Tailscale erreichbar ist
+
+```bash
+# UFW (Ubuntu/Debian)
+ufw allow in on tailscale0
+ufw allow out on tailscale0
+
+# firewalld (RHEL/CentOS/Fedora)
+firewall-cmd --permanent --zone=trusted --add-interface=tailscale0
+```
+
+**Vorteile:**
+- 🔒 Sicher: Nur Tailscale-Netzwerk hat Zugriff
+- 🐳 Docker: Container können über Tailscale kommunizieren
+- 🦎 Komodo: Periphery ist nur über Tailscale erreichbar
+- 🚀 Einfach: Keine manuellen Port-Freigaben nötig
 
 ### Nach der Installation
 
