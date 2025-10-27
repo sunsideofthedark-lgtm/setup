@@ -8,7 +8,10 @@ Ein umfassendes, modulares Setup-Skript für die sichere Ersteinrichtung von Lin
 - **SSH-Härtung**: Port-Änderung, Key-Only-Auth, Root-Login deaktivieren
 - **Firewall**: Automatische UFW/firewalld-Konfiguration mit IPv6-Support
 - **Automatische Updates**: Unattended-upgrades für Debian/Ubuntu, yum-cron für RHEL
-- **Fail2Ban Integration**: Schutz vor Brute-Force-Angriffen
+- **Fail2Ban**: Automatischer Schutz vor Brute-Force-Angriffen auf SSH
+  - 3 Fehlversuche → 1 Stunde Ban
+  - Automatische IP-Sperrung
+  - Logs in /var/log/fail2ban.log
 - **Root-Account-Sperrung**: Sichere Deaktivierung nach Setup
 
 ### 🌐 Netzwerk
@@ -30,6 +33,14 @@ Ein umfassendes, modulares Setup-Skript für die sichere Ersteinrichtung von Lin
 - **ripgrep (rg)**: Blitzschnelles grep
 - **fd**: find-Alternative
 - **Oh-My-Zsh**: Mit Powerlevel10k Theme und Plugins
+
+### 🎨 Benutzerfreundlichkeit
+- **Custom Motd**: Informatives Login-Banner mit
+  - Öffentlicher IPv4/IPv6-Adresse
+  - Tailscale VPN-IP
+  - System-Status (Uptime, Load, Memory, Disk)
+  - Docker & Komodo Status
+  - Tailscale Verbindungsstatus
 
 ### 🔧 Weitere Features
 - **Multi-Distro-Support**: Ubuntu, Debian, CentOS, RHEL, Fedora, SUSE, Arch
@@ -340,6 +351,100 @@ Diese Informationen sind wichtig für:
 - Firewall-Konfiguration
 - Monitoring-Tools
 - DNS-Einträge
+
+## 🛡️ Fail2Ban - SSH-Schutz
+
+Das Skript installiert und konfiguriert automatisch Fail2Ban zum Schutz vor Brute-Force-Angriffen.
+
+### Automatische Konfiguration
+
+- **Port-Erkennung**: Nutzt automatisch den konfigurierten SSH-Port
+- **Ban-Zeit**: 1 Stunde nach 3 Fehlversuchen
+- **Zeitfenster**: 10 Minuten
+- **Schutz**: SSH + SSH-DDOS
+
+### Fail2Ban-Einstellungen
+
+```bash
+# Standard-Konfiguration
+Max. Versuche: 3
+Ban-Zeit: 3600 Sekunden (1 Stunde)
+Zeitfenster: 600 Sekunden (10 Minuten)
+```
+
+### Nützliche Befehle
+
+```bash
+# Status anzeigen
+sudo fail2ban-client status
+sudo fail2ban-client status sshd
+
+# Gebannte IPs anzeigen
+sudo fail2ban-client status sshd
+
+# IP manuell entbannen
+sudo fail2ban-client unban 192.168.1.100
+
+# Logs anzeigen
+sudo tail -f /var/log/fail2ban.log
+
+# Service neu starten
+sudo systemctl restart fail2ban
+```
+
+### Was wird geschützt?
+
+- ✅ SSH-Login-Versuche
+- ✅ Ungültige Benutzernamen
+- ✅ Root-Login-Versuche
+- ✅ SSH-DDOS-Angriffe
+
+## 🎨 Custom Motd - Login-Banner
+
+Beim Login über SSH wird ein informatives Banner angezeigt.
+
+### Was wird angezeigt?
+
+```
+╔════════════════════════════════════════════════════════════╗
+║  myserver                                                  ║
+╠════════════════════════════════════════════════════════════╣
+║  Öffentliche IP:    5.83.145.130                          ║
+║  Tailscale IP:      100.126.38.111                        ║
+╠════════════════════════════════════════════════════════════╣
+║  Uptime:            3 days, 5 hours, 12 minutes           ║
+║  Load Average:      0.15, 0.10, 0.08                      ║
+║  Memory:            2.1G / 16G (13%)                      ║
+║  Disk (root):       45G / 100G (45%)                      ║
+╠════════════════════════════════════════════════════════════╣
+║  Docker:            3/5 Container                          ║
+║  Komodo Periphery:  ✓ Aktiv                               ║
+║  Tailscale VPN:     ✓ Verbunden                           ║
+╚════════════════════════════════════════════════════════════╝
+```
+
+### Dynamische Informationen
+
+- **System-Status**: Uptime, Load, Memory, Disk
+- **Netzwerk**: Öffentliche IP + Tailscale-IP
+- **Services**: Docker, Komodo, Tailscale Status
+- **Farben**: Status-Indikatoren (✓ = grün, ⊘ = gelb)
+
+### Manuelle Anzeige
+
+```bash
+# Motd manuell anzeigen (ohne Login)
+run-parts /etc/update-motd.d/
+
+# Oder statisches Motd
+cat /etc/motd
+```
+
+### Anpassung
+
+Die Motd-Scripte befinden sich in:
+- `/etc/update-motd.d/00-custom-header` (dynamisch)
+- `/etc/motd` (statisch, Fallback)
 
 ## 🛠️ Moderne CLI-Tools
 

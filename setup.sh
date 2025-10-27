@@ -798,6 +798,252 @@ ZSHEOF
     return 0
 }
 
+# --- Fail2Ban Installation & Konfiguration ---
+
+install_fail2ban() {
+    info "🛡️ Installiere und konfiguriere Fail2Ban..."
+
+    # Prüfe ob bereits installiert
+    if command -v fail2ban-client >/dev/null 2>&1 && systemctl is-active --quiet fail2ban 2>/dev/null; then
+        success "Fail2Ban ist bereits installiert und aktiv"
+        return 0
+    fi
+
+    # Installiere Fail2Ban
+    if ! install_package "fail2ban"; then
+        error "Fail2Ban-Installation fehlgeschlagen"
+        return 1
+    fi
+
+    # Ermittle SSH-Port (falls bereits konfiguriert)
+    local ssh_port=${SSH_PORT_SET:-2222}
+    if [ -f /etc/ssh/sshd_config ]; then
+        local configured_port=$(grep -E "^Port\s+[0-9]+" /etc/ssh/sshd_config | awk '{print $2}')
+        [ -n "$configured_port" ] && ssh_port=$configured_port
+    fi
+
+    info "Konfiguriere Fail2Ban für SSH-Port: $ssh_port"
+
+    # Erstelle jail.local mit optimierten Einstellungen
+    if [ "$DRY_RUN" != "1" ]; then
+        create_backup "/etc/fail2ban/jail.local"
+
+        cat > /etc/fail2ban/jail.local << EOF
+# Fail2Ban Konfiguration - Erstellt durch Server-Setup-Skript
+# $(date)
+
+[DEFAULT]
+# Ban-Zeit (in Sekunden): 1 Stunde
+bantime = 3600
+
+# Zeitfenster für maxretry (in Sekunden): 10 Minuten
+findtime = 600
+
+# Anzahl der Versuche vor Ban
+maxretry = 3
+
+# Aktion bei Ban: iptables-multiport blockiert den Port
+banaction = iptables-multiport
+
+# Email-Benachrichtigungen deaktiviert (kein Mail-Server)
+destemail = root@localhost
+sendername = Fail2Ban
+action = %(action_)s
+
+[sshd]
+enabled = true
+port = $ssh_port
+filter = sshd
+logpath = /var/log/auth.log
+maxretry = 3
+bantime = 3600
+findtime = 600
+
+# Zusätzliche SSH-Varianten
+[sshd-ddos]
+enabled = true
+port = $ssh_port
+filter = sshd-ddos
+logpath = /var/log/auth.log
+maxretry = 2
+bantime = 7200
+findtime = 300
+EOF
+        success "Fail2Ban-Konfiguration erstellt"
+    else
+        debug "[DRY-RUN] Would create /etc/fail2ban/jail.local"
+    fi
+
+    # Erstelle erweiterten SSH-Filter für aggressive Angriffe
+    if [ "$DRY_RUN" != "1" ]; then
+        cat > /etc/fail2ban/filter.d/sshd-aggressive.conf << 'EOF'
+# Aggressive SSH-Angriffe erkennen
+[Definition]
+failregex = ^%(__prefix_line)s(?:error: PAM: )?[aA]uthentication (?:failure|error|failed) for .* from <HOST>( via \S+)?\s*$
+            ^%(__prefix_line)s(?:error: PAM: )?User not known to the underlying authentication module for .* from <HOST>\s*$
+            ^%(__prefix_line)sFailed \S+ for .*? from <HOST>(?: port \d*)?(?: ssh\d*)?(: (ruser .*|(\S+ ID \S+ \(serial \d+\) CA )?\S+ %(__md5hex)s(, client user ".*", client host ".*")?))?\s*$
+            ^%(__prefix_line)sROOT LOGIN REFUSED.* FROM <HOST>\s*$
+            ^%(__prefix_line)s[iI](?:llegal|nvalid) user .* from <HOST>\s*$
+EOF
+        success "Aggressive SSH-Filter erstellt"
+    fi
+
+    # Starte und aktiviere Fail2Ban
+    manage_service enable fail2ban
+    manage_service restart fail2ban
+
+    # Warte kurz und prüfe Status
+    sleep 2
+
+    if systemctl is-active --quiet fail2ban 2>/dev/null; then
+        success "✅ Fail2Ban ist aktiv und schützt SSH (Port $ssh_port)"
+
+        echo ""
+        echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
+        echo -e "${C_CYAN}       🛡️  FAIL2BAN KONFIGURATION              ${C_RESET}"
+        echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
+        echo ""
+        echo -e "${C_BLUE}SSH-Port:${C_RESET} $ssh_port"
+        echo -e "${C_BLUE}Max. Versuche:${C_RESET} 3 (dann Ban)"
+        echo -e "${C_BLUE}Ban-Zeit:${C_RESET} 1 Stunde"
+        echo -e "${C_BLUE}Zeitfenster:${C_RESET} 10 Minuten"
+        echo ""
+        echo -e "${C_YELLOW}Nützliche Befehle:${C_RESET}"
+        echo -e "  ${C_GREEN}fail2ban-client status${C_RESET}           # Status aller Jails"
+        echo -e "  ${C_GREEN}fail2ban-client status sshd${C_RESET}     # SSH-Jail Status"
+        echo -e "  ${C_GREEN}fail2ban-client unban <IP>${C_RESET}      # IP entbannen"
+        echo ""
+        echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
+        echo ""
+    else
+        error "Fail2Ban konnte nicht gestartet werden"
+        return 1
+    fi
+
+    log_action "FAIL2BAN" "Configured and started for SSH port $ssh_port"
+    return 0
+}
+
+# --- Custom Motd (Message of the Day) ---
+
+setup_custom_motd() {
+    info "🎨 Erstelle Custom Motd (Message of the Day)..."
+
+    # Deaktiviere Standard-Motd-Scripte
+    if [ "$DRY_RUN" != "1" ]; then
+        # Ubuntu/Debian: Deaktiviere unnötige motd-Scripte
+        if [ -d /etc/update-motd.d ]; then
+            for script in 10-help-text 50-motd-news 80-esm 80-livepatch 90-updates-available 91-release-upgrade 95-hwe-eol; do
+                [ -f /etc/update-motd.d/$script ] && chmod -x /etc/update-motd.d/$script 2>/dev/null || true
+            done
+            success "Standard-Motd-Scripte deaktiviert"
+        fi
+
+        # Erstelle eigenes Motd-Script
+        cat > /etc/update-motd.d/00-custom-header << 'EOFMOTD'
+#!/bin/bash
+
+# Farben
+C_RESET='\033[0m'
+C_BOLD='\033[1m'
+C_GREEN='\033[32m'
+C_BLUE='\033[34m'
+C_CYAN='\033[36m'
+C_YELLOW='\033[33m'
+
+# System-Info
+HOSTNAME=$(hostname)
+KERNEL=$(uname -r)
+UPTIME=$(uptime -p | sed 's/up //')
+LOAD=$(uptime | awk -F'load average:' '{print $2}')
+MEMORY=$(free -h | awk '/^Mem:/ {printf "%s / %s (%.0f%%)", $3, $2, ($3/$2)*100}')
+DISK=$(df -h / | awk 'NR==2 {printf "%s / %s (%s)", $3, $2, $5}')
+USERS=$(who | wc -l)
+
+# IP-Adressen
+PUBLIC_IP=$(curl -4 -s --max-time 3 ifconfig.me 2>/dev/null || echo "N/A")
+TAILSCALE_IP=$(tailscale ip -4 2>/dev/null || echo "N/A")
+
+# Docker Status
+if command -v docker >/dev/null 2>&1; then
+    DOCKER_RUNNING=$(docker ps -q 2>/dev/null | wc -l)
+    DOCKER_TOTAL=$(docker ps -aq 2>/dev/null | wc -l)
+    DOCKER_STATUS="${C_GREEN}${DOCKER_RUNNING}${C_RESET}/${DOCKER_TOTAL} Container"
+else
+    DOCKER_STATUS="${C_YELLOW}nicht installiert${C_RESET}"
+fi
+
+# Komodo Status
+if docker ps 2>/dev/null | grep -q komodo-periphery; then
+    KOMODO_STATUS="${C_GREEN}✓ Aktiv${C_RESET}"
+else
+    KOMODO_STATUS="${C_YELLOW}⊘ Inaktiv${C_RESET}"
+fi
+
+# Tailscale Status
+if command -v tailscale >/dev/null 2>&1 && tailscale status >/dev/null 2>&1; then
+    TAILSCALE_STATUS="${C_GREEN}✓ Verbunden${C_RESET}"
+else
+    TAILSCALE_STATUS="${C_YELLOW}⊘ Getrennt${C_RESET}"
+fi
+
+# Ausgabe
+echo ""
+echo -e "${C_CYAN}╔════════════════════════════════════════════════════════════╗${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_BOLD}${C_BLUE}$(printf "%-54s" "$HOSTNAME")${C_RESET}  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}╠════════════════════════════════════════════════════════════╣${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_GREEN}Öffentliche IP:${C_RESET}    $(printf "%-37s" "$PUBLIC_IP")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_GREEN}Tailscale IP:${C_RESET}      $(printf "%-37s" "$TAILSCALE_IP")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}╠════════════════════════════════════════════════════════════╣${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_BLUE}Uptime:${C_RESET}            $(printf "%-37s" "$UPTIME")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_BLUE}Load Average:${C_RESET}     $(printf "%-37s" "$LOAD")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_BLUE}Memory:${C_RESET}            $(printf "%-37s" "$MEMORY")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_BLUE}Disk (root):${C_RESET}       $(printf "%-37s" "$DISK")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}╠════════════════════════════════════════════════════════════╣${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_YELLOW}Docker:${C_RESET}            $(printf "%-37s" "$DOCKER_STATUS")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_YELLOW}Komodo Periphery:${C_RESET} $(printf "%-37s" "$KOMODO_STATUS")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}║${C_RESET}  ${C_YELLOW}Tailscale VPN:${C_RESET}    $(printf "%-37s" "$TAILSCALE_STATUS")  ${C_CYAN}║${C_RESET}"
+echo -e "${C_CYAN}╚════════════════════════════════════════════════════════════╝${C_RESET}"
+echo ""
+EOFMOTD
+
+        chmod +x /etc/update-motd.d/00-custom-header
+        success "Custom Motd-Script erstellt: /etc/update-motd.d/00-custom-header"
+
+        # Erstelle auch statisches Motd für Systeme ohne update-motd.d
+        cat > /etc/motd << 'EOFSTATIC'
+═══════════════════════════════════════════════════════════
+  Willkommen auf diesem Server!
+
+  Dieses System wird durch ein automatisches Setup-Skript
+  verwaltet und ist optimiert für Sicherheit und Performance.
+
+  Wichtige Befehle:
+    - tailscale status          # Tailscale VPN Status
+    - docker ps                 # Laufende Container
+    - fail2ban-client status    # Fail2Ban Status
+    - htop                      # System Monitor
+═══════════════════════════════════════════════════════════
+
+EOFSTATIC
+        success "Statisches Motd erstellt: /etc/motd"
+
+    else
+        debug "[DRY-RUN] Would create custom motd scripts"
+    fi
+
+    echo ""
+    echo -e "${C_GREEN}✅ Custom Motd konfiguriert!${C_RESET}"
+    echo -e "${C_BLUE}Das Motd wird bei jedem SSH-Login angezeigt.${C_RESET}"
+    echo ""
+    echo -e "${C_YELLOW}Testen Sie es mit:${C_RESET}"
+    echo -e "  ${C_GREEN}run-parts /etc/update-motd.d/${C_RESET}"
+    echo ""
+
+    log_action "MOTD" "Custom motd configured"
+    return 0
+}
+
 # --- HAUPTSKRIPT ---
 
 # Pers Command-line Arguments (must be before setup_logging)
@@ -850,7 +1096,8 @@ echo "  2. Hostname konfigurieren (IMMER VOR Tailscale!)"
 echo "  3. Tailscale VPN installieren + IP-Anzeige"
 echo "  4. Komodo Periphery Setup"
 echo "  5. Moderne CLI-Tools installieren"
-echo "  6. Oh-My-Zsh installieren"
+echo "  6. Fail2Ban (SSH-Schutz)"
+echo "  7. Custom Motd (Login-Banner)"
 echo ""
 
 if confirm "System-Update durchführen?"; then
@@ -875,6 +1122,10 @@ confirm "Tailscale VPN installieren?" && install_tailscale
 confirm "Komodo Periphery einrichten?" && setup_komodo_periphery
 
 confirm "Moderne CLI-Tools installieren?" && install_modern_cli_tools
+
+confirm "Fail2Ban installieren (SSH-Schutz)?" && install_fail2ban
+
+confirm "Custom Motd einrichten?" && setup_custom_motd
 
 echo ""
 info "Netzwerk-Informationen:"
