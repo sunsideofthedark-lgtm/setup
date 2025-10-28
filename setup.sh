@@ -634,9 +634,62 @@ setup_komodo_periphery() {
         [ -n "$tailscale_ip" ] && info "Verwende Tailscale-IP: $tailscale_ip"
     fi
     [ -z "$tailscale_ip" ] && warning "Keine Tailscale-IP. Verwende 0.0.0.0" && tailscale_ip="0.0.0.0"
-    
-    local passkey=$(openssl rand -base64 48 | tr -d "=+/" | cut -c1-64)
-    
+
+    # Passkey interaktiv eingeben (da dieser im Komodo-Server definiert wird)
+    local passkey=""
+    if [ "$SKIP_INTERACTIVE" != "1" ] && [ "$DRY_RUN" != "1" ]; then
+        echo ""
+        echo -e "${C_YELLOW}═══════════════════════════════════════════════════${C_RESET}"
+        echo -e "${C_YELLOW}  Komodo Periphery Passkey wird benötigt!${C_RESET}"
+        echo -e "${C_YELLOW}═══════════════════════════════════════════════════${C_RESET}"
+        echo ""
+        echo -e "${C_BLUE}Der Passkey muss im Komodo-Server konfiguriert sein.${C_RESET}"
+        echo -e "${C_BLUE}Diesen Passkey finden Sie in der Komodo-Server-Konfiguration.${C_RESET}"
+        echo ""
+
+        if confirm "Möchten Sie einen zufälligen Passkey generieren lassen?"; then
+            passkey=$(openssl rand -base64 48 | tr -d "=+/" | cut -c1-64)
+            info "Zufälliger Passkey wurde generiert"
+            echo ""
+            echo -e "${C_GREEN}Generierter Passkey:${C_RESET} ${C_CYAN}${passkey}${C_RESET}"
+            echo ""
+            echo -e "${C_YELLOW}⚠️  WICHTIG: Fügen Sie diesen Passkey in Ihrem Komodo-Server hinzu!${C_RESET}"
+            echo ""
+            read -p "Drücken Sie Enter, um fortzufahren..."
+        else
+            while [ -z "$passkey" ]; do
+                echo ""
+                read -s -p "Komodo Passkey eingeben (wird nicht angezeigt): " passkey
+                echo ""
+
+                if [ -z "$passkey" ]; then
+                    error "Passkey darf nicht leer sein!"
+                elif [ ${#passkey} -lt 32 ]; then
+                    warning "Passkey sollte mindestens 32 Zeichen lang sein!"
+                    if ! confirm "Trotzdem verwenden?"; then
+                        passkey=""
+                    fi
+                fi
+            done
+
+            # Bestätigung
+            echo ""
+            read -s -p "Passkey bestätigen: " passkey_confirm
+            echo ""
+
+            if [ "$passkey" != "$passkey_confirm" ]; then
+                error "Passkeys stimmen nicht überein! Bitte erneut versuchen."
+                return 1
+            fi
+
+            success "Passkey wurde akzeptiert (Länge: ${#passkey} Zeichen)"
+        fi
+    else
+        # Non-interactive oder Dry-Run: Generiere zufälligen Passkey
+        passkey=$(openssl rand -base64 48 | tr -d "=+/" | cut -c1-64)
+        info "Passkey automatisch generiert (non-interactive mode)"
+    fi
+
     info "Erstelle docker-compose.yml..."
     if [ "$DRY_RUN" != "1" ]; then
         cat > "$KOMODO_PATH/docker-compose.yml" << EOF

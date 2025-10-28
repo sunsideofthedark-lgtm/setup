@@ -298,7 +298,9 @@ Das Skript richtet automatisch Komodo Periphery ein:
 
 - **Verzeichnis**: `/opt/komodo/` (Standard) oder eigener Pfad
 - **Port**: `<tailscale-ip>:8120` (bindet an Tailscale-IP)
-- **Passkey**: Automatisch generiert und angezeigt
+- **Passkey**: Interaktive Eingabe (vom Komodo-Server)
+  - Option 1: Bestehenden Passkey eingeben
+  - Option 2: Zufälligen Passkey generieren lassen
 - **Docker Compose**: Fertig konfiguriert
 - **SSL**: Aktiviert
 
@@ -329,15 +331,41 @@ $KOMODO_PATH/              # Ihr gewählter Pfad (z.B. /opt/komodo oder /srv/kom
 └── ...                    # Repos, Stacks, Builds
 ```
 
-### Passkey notieren!
+### Passkey-Konfiguration
 
-⚠️ **WICHTIG**: Das automatisch generierte Passkey wird NUR EINMAL angezeigt!
+Der Passkey muss zwischen Komodo-Server und Periphery übereinstimmen.
 
+**Workflow während der Installation:**
+
+1. **Option 1: Bestehenden Passkey eingeben**
+   ```
+   Komodo Passkey eingeben (wird nicht angezeigt): ****
+   Passkey bestätigen: ****
+   ✓ Passkey wurde akzeptiert
+   ```
+   Verwenden Sie den Passkey aus Ihrer Komodo-Server-Konfiguration.
+
+2. **Option 2: Zufälligen Passkey generieren lassen**
+   ```
+   Möchten Sie einen zufälligen Passkey generieren lassen? (j/N): j
+   ✓ Zufälliger Passkey wurde generiert
+
+   Generierter Passkey: ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
+
+   ⚠️  WICHTIG: Fügen Sie diesen Passkey in Ihrem Komodo-Server hinzu!
+   ```
+   Kopieren Sie den generierten Passkey in Ihre Komodo-Server-Konfiguration.
+
+**Passkey nachträglich ändern:**
+
+Der Passkey ist in der `.env`-Datei gespeichert:
+```bash
+nano $KOMODO_PATH/.env
+# PERIPHERY_PASSKEYS=ihr-neuer-passkey
+
+# Container neu starten
+cd $KOMODO_PATH && docker compose restart
 ```
-🔑 Passkey: ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
-```
-
-Notieren Sie es für die Verbindung mit Komodo Core.
 
 ### Komodo starten/stoppen
 
