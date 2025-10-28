@@ -2,6 +2,8 @@
 
 Ein umfassendes, modulares Setup-Skript für die sichere Ersteinrichtung von Linux-Servern mit automatischer Konfiguration von Tailscale VPN, Komodo Periphery und modernen CLI-Tools.
 
+**🔗 GitHub Repository:** [https://github.com/sunsideofthedark-lgtm/setup](https://github.com/sunsideofthedark-lgtm/setup)
+
 ## ✨ Features
 
 ### 🔐 Sicherheit
@@ -64,69 +66,12 @@ Ein umfassendes, modulares Setup-Skript für die sichere Ersteinrichtung von Lin
 
 ## 🚦 Schnellstart
 
-### ⚡ Quick Install (One-Liner)
-
-Das Script kann direkt aus dem GitHub-Repository geladen und ausgeführt werden - perfekt für schnelle Deployments!
-
 ```bash
-# Einfache Installation (interaktiv)
-curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo bash
-
-# Oder mit wget
-wget -qO- https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo bash
-```
-
-**Mit Parametern für vollautomatische Installation:**
-
-```bash
-# Vollautomatische Installation mit Tailscale Key
-curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo bash -s -- \
-  --tailscale-key "tskey-auth-xxx-xxxxx" \
-  --komodo-path "/opt/komodo" \
-  --hostname "myserver" \
-  --ssh-port 2222 \
-  --yes
-
-# Mit Umgebungsvariablen
-export TAILSCALE_KEY="tskey-auth-xxx-xxxxx"
-export KOMODO_PATH="/opt/komodo"
-curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo -E bash -s -- --yes
-```
-
-**Vorteile:**
-- ✅ Keine manuelle Datei-Downloads nötig
-- ✅ Immer die neueste Version vom GitHub
-- ✅ Perfekt für Terraform, Ansible, Cloud-Init
-- ✅ Alle Parameter durchreichbar
-
-### Einfache Ausführung
-
-```bash
-# Repository klonen oder herunterladen
-git clone <repository-url>
+# Repository klonen
+git clone https://github.com/sunsideofthedark-lgtm/setup.git
 cd setup
 
-# Als root/sudo ausführen
-sudo ./start.sh
-```
-
-### Mit Optionen
-
-```bash
-# Normal
-sudo ./start.sh
-
-# Debug-Modus (ausführliche Ausgabe)
-sudo ./start.sh debug
-
-# Dry-Run (keine Änderungen, nur Test)
-sudo ./start.sh dry-run
-```
-
-### Direkte Ausführung
-
-```bash
-# Normal (interaktiv)
+# Als root/sudo ausführen (interaktiv)
 sudo ./setup.sh
 
 # Hilfe anzeigen
@@ -193,7 +138,7 @@ DRY_RUN=1 TAILSCALE_KEY=tskey-auth-XXX sudo ./setup.sh
 Das Skript führt Sie interaktiv durch alle Module:
 
 ```bash
-sudo ./start.sh
+sudo ./setup.sh
 ```
 
 Sie werden gefragt:
@@ -213,7 +158,7 @@ Sie werden gefragt:
 Wählen Sie nur bestimmte Module:
 
 ```bash
-sudo ./start.sh
+sudo ./setup.sh
 
 # Im Menü: Option "2. Modulare Auswahl"
 # Dann einzelne Module mit Nummern auswählen (z.B. 1,3,5)
@@ -294,7 +239,9 @@ Das Skript richtet automatisch Komodo Periphery ein:
 
 - **Verzeichnis**: `/opt/komodo/` (Standard) oder eigener Pfad
 - **Port**: `<tailscale-ip>:8120` (bindet an Tailscale-IP)
-- **Passkey**: Automatisch generiert und angezeigt
+- **Passkey**: Interaktive Eingabe (vom Komodo-Server)
+  - Option 1: Bestehenden Passkey eingeben
+  - Option 2: Zufälligen Passkey generieren lassen
 - **Docker Compose**: Fertig konfiguriert
 - **SSL**: Aktiviert
 
@@ -325,15 +272,48 @@ $KOMODO_PATH/              # Ihr gewählter Pfad (z.B. /opt/komodo oder /srv/kom
 └── ...                    # Repos, Stacks, Builds
 ```
 
-### Passkey notieren!
+### Passkey-Konfiguration
 
-⚠️ **WICHTIG**: Das automatisch generierte Passkey wird NUR EINMAL angezeigt!
+Der Passkey muss zwischen Komodo-Server und Periphery übereinstimmen.
 
+**Workflow während der Installation:**
+
+1. **Option 1: Bestehenden Passkey eingeben**
+   ```
+   Komodo Passkey eingeben: ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
+
+   ═══════════════════════════════════════════════════
+   Eingegebener Passkey:
+   ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
+   ═══════════════════════════════════════════════════
+
+   Ist dieser Passkey korrekt? (j/N): j
+   ✓ Passkey wurde akzeptiert (Länge: 64 Zeichen)
+   ```
+   Der Passkey ist **sichtbar** während der Eingabe, sodass Sie ihn mit dem
+   Passkey aus Ihrer Komodo-Server-Konfiguration abgleichen können.
+
+2. **Option 2: Zufälligen Passkey generieren lassen**
+   ```
+   Möchten Sie einen zufälligen Passkey generieren lassen? (j/N): j
+   ✓ Zufälliger Passkey wurde generiert
+
+   Generierter Passkey: ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
+
+   ⚠️  WICHTIG: Fügen Sie diesen Passkey in Ihrem Komodo-Server hinzu!
+   ```
+   Kopieren Sie den generierten Passkey in Ihre Komodo-Server-Konfiguration.
+
+**Passkey nachträglich ändern:**
+
+Der Passkey ist in der `.env`-Datei gespeichert:
+```bash
+nano $KOMODO_PATH/.env
+# PERIPHERY_PASSKEYS=ihr-neuer-passkey
+
+# Container neu starten
+cd $KOMODO_PATH && docker compose restart
 ```
-🔑 Passkey: ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
-```
-
-Notieren Sie es für die Verbindung mit Komodo Core.
 
 ### Komodo starten/stoppen
 
@@ -556,7 +536,7 @@ update           # apt update && upgrade
 Teste das Skript ohne echte Änderungen:
 
 ```bash
-sudo ./start.sh dry-run
+sudo ./setup.sh --dry-run
 ```
 
 Ausgabe:
@@ -577,7 +557,7 @@ Nützlich für:
 Ausführliche Logging-Ausgabe:
 
 ```bash
-sudo ./start.sh debug
+sudo ./setup.sh --debug
 ```
 
 Zeigt:
@@ -619,10 +599,10 @@ Das Skript kann mehrfach ausgeführt werden:
 
 ```bash
 # Erstmaliges Setup
-sudo ./start.sh
+sudo ./setup.sh
 
 # Später erneut ausführen (z.B. für neue Module)
-sudo ./start.sh
+sudo ./setup.sh
 # → Bereits konfigurierte Module werden erkannt
 ```
 
