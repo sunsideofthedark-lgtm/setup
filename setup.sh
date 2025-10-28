@@ -714,6 +714,186 @@ install_tailscale() {
     return 0
 }
 
+# --- Docker Installation ---
+
+install_docker() {
+    info "🐳 Installiere Docker Engine + Docker Compose..."
+
+    # Prüfe ob Docker bereits installiert ist
+    if command -v docker >/dev/null 2>&1; then
+        local docker_version=$(docker --version 2>/dev/null | awk '{print $3}' | tr -d ',')
+        success "Docker ist bereits installiert: Version $docker_version"
+
+        # Prüfe Docker Compose
+        if docker compose version >/dev/null 2>&1; then
+            local compose_version=$(docker compose version --short 2>/dev/null)
+            success "Docker Compose ist bereits installiert: Version $compose_version"
+        else
+            warning "Docker Compose fehlt, installiere..."
+        fi
+
+        # Prüfe ob Docker läuft
+        if systemctl is-active --quiet docker 2>/dev/null; then
+            success "Docker-Service ist aktiv"
+            return 0
+        else
+            warning "Docker-Service ist nicht aktiv, starte..."
+            manage_service enable docker
+            manage_service start docker
+            return 0
+        fi
+    fi
+
+    info "Docker wird installiert..."
+
+    case "$PKG_MANAGER" in
+        apt)
+            # Debian/Ubuntu Docker Installation
+            info "Installiere Docker für Debian/Ubuntu..."
+
+            # Alte Versionen entfernen
+            dry_run "apt-get remove -y docker docker-engine docker.io containerd runc 2>/dev/null || true"
+
+            # Abhängigkeiten installieren
+            install_package ca-certificates
+            install_package curl
+            install_package gnupg
+            install_package lsb-release
+
+            # Docker GPG-Key hinzufügen
+            if [ "$DRY_RUN" != "1" ]; then
+                info "Füge Docker GPG-Key hinzu..."
+                mkdir -p /etc/apt/keyrings
+                curl -fsSL https://download.docker.com/linux/$OS_NAME/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg 2>/dev/null || {
+                    error "Docker GPG-Key konnte nicht hinzugefügt werden"
+                    return 1
+                }
+                chmod a+r /etc/apt/keyrings/docker.gpg
+
+                # Docker Repository hinzufügen
+                info "Füge Docker Repository hinzu..."
+                echo \
+                  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/$OS_NAME \
+                  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+                # Repository aktualisieren
+                dry_run "apt-get update"
+            else
+                debug "[DRY-RUN] Would add Docker GPG key and repository"
+            fi
+
+            # Docker installieren
+            install_package docker-ce
+            install_package docker-ce-cli
+            install_package containerd.io
+            install_package docker-buildx-plugin
+            install_package docker-compose-plugin
+            ;;
+
+        yum|dnf)
+            # RHEL/CentOS/Fedora Docker Installation
+            info "Installiere Docker für RHEL/CentOS/Fedora..."
+
+            # Alte Versionen entfernen
+            dry_run "$PKG_MANAGER remove -y docker docker-client docker-client-latest docker-common docker-latest docker-latest-logrotate docker-logrotate docker-engine 2>/dev/null || true"
+
+            # Abhängigkeiten installieren
+            install_package yum-utils
+
+            # Docker Repository hinzufügen
+            if [ "$DRY_RUN" != "1" ]; then
+                info "Füge Docker Repository hinzu..."
+                yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo || {
+                    error "Docker Repository konnte nicht hinzugefügt werden"
+                    return 1
+                }
+            else
+                debug "[DRY-RUN] Would add Docker repository"
+            fi
+
+            # Docker installieren
+            install_package docker-ce
+            install_package docker-ce-cli
+            install_package containerd.io
+            install_package docker-buildx-plugin
+            install_package docker-compose-plugin
+            ;;
+
+        pacman)
+            # Arch Linux Docker Installation
+            info "Installiere Docker für Arch Linux..."
+            install_package docker
+            install_package docker-compose
+            ;;
+
+        zypper)
+            # openSUSE Docker Installation
+            info "Installiere Docker für openSUSE..."
+            install_package docker
+            install_package docker-compose
+            ;;
+
+        *)
+            error "Automatische Docker-Installation für $PKG_MANAGER nicht unterstützt"
+            info "Bitte installiere Docker manuell: https://docs.docker.com/engine/install/"
+            return 1
+            ;;
+    esac
+
+    # Docker-Service starten und aktivieren
+    manage_service enable docker
+    manage_service start docker
+
+    # Warte kurz und prüfe Status
+    sleep 2
+
+    if command -v docker >/dev/null 2>&1; then
+        local docker_version=$(docker --version 2>/dev/null)
+        success "✅ Docker erfolgreich installiert: $docker_version"
+
+        # Prüfe Docker Compose
+        if docker compose version >/dev/null 2>&1; then
+            local compose_version=$(docker compose version --short 2>/dev/null)
+            success "✅ Docker Compose installiert: $compose_version"
+        fi
+    else
+        error "Docker-Installation fehlgeschlagen"
+        return 1
+    fi
+
+    # Benutzer zur docker-Gruppe hinzufügen (falls SUDO_USER gesetzt)
+    if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+        info "Füge Benutzer $SUDO_USER zur docker-Gruppe hinzu..."
+        if [ "$DRY_RUN" != "1" ]; then
+            usermod -aG docker "$SUDO_USER" 2>/dev/null || warning "Konnte Benutzer nicht zur docker-Gruppe hinzufügen"
+            success "Benutzer $SUDO_USER zur docker-Gruppe hinzugefügt"
+            info "⚠️  Änderung wird nach erneutem Login wirksam!"
+        else
+            debug "[DRY-RUN] Would add $SUDO_USER to docker group"
+        fi
+    fi
+
+    echo ""
+    echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
+    echo -e "${C_CYAN}       🐳 DOCKER INSTALLATION ABGESCHLOSSEN       ${C_RESET}"
+    echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
+    echo ""
+    echo -e "${C_GREEN}Docker Engine:${C_RESET} $(docker --version 2>/dev/null || echo 'N/A')"
+    echo -e "${C_GREEN}Docker Compose:${C_RESET} $(docker compose version --short 2>/dev/null || echo 'N/A')"
+    echo ""
+    echo -e "${C_YELLOW}Nützliche Befehle:${C_RESET}"
+    echo -e "  ${C_GREEN}docker ps${C_RESET}                    # Laufende Container"
+    echo -e "  ${C_GREEN}docker compose up -d${C_RESET}         # Stack starten"
+    echo -e "  ${C_GREEN}docker compose logs -f${C_RESET}       # Logs anzeigen"
+    echo -e "  ${C_GREEN}docker system df${C_RESET}             # Disk-Usage anzeigen"
+    echo ""
+    echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
+    echo ""
+
+    log_action "DOCKER" "Docker Engine and Compose installed successfully"
+    return 0
+}
+
 # --- Komodo Periphery Setup ---
 
 setup_komodo_periphery() {
@@ -1269,10 +1449,11 @@ info "Verfügbare Module:"
 echo "  1. System Update"
 echo "  2. Hostname konfigurieren (IMMER VOR Tailscale!)"
 echo "  3. Tailscale VPN installieren + IP-Anzeige"
-echo "  4. Komodo Periphery Setup"
-echo "  5. Moderne CLI-Tools installieren"
-echo "  6. Fail2Ban (SSH-Schutz)"
-echo "  7. Custom Motd (Login-Banner)"
+echo "  4. Docker Engine + Docker Compose (BENÖTIGT für Komodo!)"
+echo "  5. Komodo Periphery Setup"
+echo "  6. Moderne CLI-Tools installieren"
+echo "  7. Fail2Ban (SSH-Schutz)"
+echo "  8. Custom Motd (Login-Banner)"
 echo ""
 
 if confirm "System-Update durchführen?"; then
@@ -1293,6 +1474,8 @@ if confirm "Hostname konfigurieren?"; then
 fi
 
 confirm "Tailscale VPN installieren?" && install_tailscale
+
+confirm "Docker Engine + Compose installieren?" && install_docker
 
 confirm "Komodo Periphery einrichten?" && setup_komodo_periphery
 
