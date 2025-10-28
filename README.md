@@ -339,11 +339,18 @@ Der Passkey muss zwischen Komodo-Server und Periphery übereinstimmen.
 
 1. **Option 1: Bestehenden Passkey eingeben**
    ```
-   Komodo Passkey eingeben (wird nicht angezeigt): ****
-   Passkey bestätigen: ****
-   ✓ Passkey wurde akzeptiert
+   Komodo Passkey eingeben: ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
+
+   ═══════════════════════════════════════════════════
+   Eingegebener Passkey:
+   ijQGCrwLG4bjfNq1vKBIsqSqbzDJCTZVN7fOA988CoeJJK1bmyjLnQn8fWnVL6cr
+   ═══════════════════════════════════════════════════
+
+   Ist dieser Passkey korrekt? (j/N): j
+   ✓ Passkey wurde akzeptiert (Länge: 64 Zeichen)
    ```
-   Verwenden Sie den Passkey aus Ihrer Komodo-Server-Konfiguration.
+   Der Passkey ist **sichtbar** während der Eingabe, sodass Sie ihn mit dem
+   Passkey aus Ihrer Komodo-Server-Konfiguration abgleichen können.
 
 2. **Option 2: Zufälligen Passkey generieren lassen**
    ```

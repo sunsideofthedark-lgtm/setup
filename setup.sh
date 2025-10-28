@@ -659,7 +659,7 @@ setup_komodo_periphery() {
         else
             while [ -z "$passkey" ]; do
                 echo ""
-                read -s -p "Komodo Passkey eingeben (wird nicht angezeigt): " passkey
+                read -p "Komodo Passkey eingeben: " passkey
                 echo ""
 
                 if [ -z "$passkey" ]; then
@@ -672,13 +672,16 @@ setup_komodo_periphery() {
                 fi
             done
 
-            # Bestätigung
+            # Zeige eingegebenen Passkey zur Bestätigung
             echo ""
-            read -s -p "Passkey bestätigen: " passkey_confirm
+            echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
+            echo -e "${C_GREEN}Eingegebener Passkey:${C_RESET}"
+            echo -e "${C_YELLOW}${passkey}${C_RESET}"
+            echo -e "${C_CYAN}═══════════════════════════════════════════════════${C_RESET}"
             echo ""
 
-            if [ "$passkey" != "$passkey_confirm" ]; then
-                error "Passkeys stimmen nicht überein! Bitte erneut versuchen."
+            if ! confirm "Ist dieser Passkey korrekt?"; then
+                error "Passkey-Eingabe abgebrochen. Bitte erneut versuchen."
                 return 1
             fi
 
