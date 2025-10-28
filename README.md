@@ -64,6 +64,41 @@ Ein umfassendes, modulares Setup-Skript für die sichere Ersteinrichtung von Lin
 
 ## 🚦 Schnellstart
 
+### ⚡ Quick Install (One-Liner)
+
+Das Script kann direkt aus dem GitHub-Repository geladen und ausgeführt werden - perfekt für schnelle Deployments!
+
+```bash
+# Einfache Installation (interaktiv)
+curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo bash
+
+# Oder mit wget
+wget -qO- https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo bash
+```
+
+**Mit Parametern für vollautomatische Installation:**
+
+```bash
+# Vollautomatische Installation mit Tailscale Key
+curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo bash -s -- \
+  --tailscale-key "tskey-auth-xxx-xxxxx" \
+  --komodo-path "/opt/komodo" \
+  --hostname "myserver" \
+  --ssh-port 2222 \
+  --yes
+
+# Mit Umgebungsvariablen
+export TAILSCALE_KEY="tskey-auth-xxx-xxxxx"
+export KOMODO_PATH="/opt/komodo"
+curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | sudo -E bash -s -- --yes
+```
+
+**Vorteile:**
+- ✅ Keine manuelle Datei-Downloads nötig
+- ✅ Immer die neueste Version vom GitHub
+- ✅ Perfekt für Terraform, Ansible, Cloud-Init
+- ✅ Alle Parameter durchreichbar
+
 ### Einfache Ausführung
 
 ```bash
