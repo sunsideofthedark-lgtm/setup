@@ -1,25 +1,144 @@
 #!/bin/bash
 
 # ==============================================================================
-# Universelles Server-Setup-Skript für Linux-Distributionen (Version 3.0)
+# 🚀 UNIVERSELLES LINUX SERVER SETUP SCRIPT v3.0
 # ==============================================================================
-# 
-# Neue Features v3.0:
-# - Tailscale VPN Integration mit Auth-Key Support
-# - Komodo Periphery Auto-Setup mit Docker Compose  
-# - Moderne CLI-Tools (bat, exa, fzf, ripgrep, fd)
-# - Oh-My-Zsh Installation
-# - Dry-Run Modus für sichere Tests
-# - Verbesserte Idempotenz und Error-Recovery
-# - IP-Adressen Anzeige (public IPv4/IPv6, Tailscale)
-# - Hostname wird IMMER vor Tailscale konfiguriert
 #
-# Ausführung:
-#   sudo ./setup.sh                                    # Normal
-#   DEBUG=1 sudo ./setup.sh                           # Mit Debug-Ausgabe
-#   DRY_RUN=1 sudo ./setup.sh                         # Test-Modus (keine Änderungen)
-#   TAILSCALE_KEY=tskey-... sudo ./setup.sh          # Mit Tailscale-Key
-#   KOMODO_PATH=/srv/komodo sudo ./setup.sh          # Eigener Komodo-Pfad
+# DAS EINE umfassende Script für sichere Linux-Server-Konfiguration
+#
+# 📦 WAS WIRD INSTALLIERT & KONFIGURIERT:
+# ==============================================================================
+#
+# 🔐 SICHERHEIT:
+#   ✓ SSH-Härtung (Port-Änderung, Key-Only-Auth, Root-Login-Sperre)
+#   ✓ Firewall (UFW/firewalld mit automatischer Konfiguration)
+#   ✓ Fail2Ban (Brute-Force-Schutz: 3 Versuche → 1h Ban)
+#   ✓ Automatische Updates (unattended-upgrades/yum-cron)
+#   ✓ Root-Account-Sperrung nach Setup
+#   ✓ Sudo-Benutzer mit sicheren Rechten
+#
+# 🌐 NETZWERK & VPN:
+#   ✓ Tailscale VPN (mit Auth-Key-Integration)
+#   ✓ Hostname-Konfiguration (immer VOR Tailscale!)
+#   ✓ IP-Adressen-Anzeige (public IPv4/IPv6 + Tailscale)
+#   ✓ Tailscale-Firewall (komplette Interface-Freigabe)
+#   ✓ Docker über Tailscale kommunikationsfähig
+#
+# 🐳 DOCKER & KOMODO:
+#   ✓ Docker Engine + Docker Compose v2
+#   ✓ Komodo Periphery (Docker-Management-Tool)
+#   ✓ Auto-Konfiguration mit docker-compose.yml + .env
+#   ✓ Tailscale-IP-Binding (Port 8120)
+#   ✓ Passkey-Management (interaktiv/generiert)
+#   ✓ SSL aktiviert
+#
+# 🛠️ MODERNE CLI-TOOLS:
+#   ✓ bat        - cat mit Syntax-Highlighting
+#   ✓ exa        - ls-Alternative mit Icons & Git-Status
+#   ✓ fzf        - Fuzzy Finder für Kommandozeile
+#   ✓ ripgrep    - Blitzschnelles grep (rg)
+#   ✓ fd         - find-Alternative
+#   ✓ htop       - System-Monitor
+#   ✓ ncdu       - Disk-Usage-Analyzer
+#
+# 🎨 SHELL & TERMINAL:
+#   ✓ Oh-My-Zsh mit Powerlevel10k Theme
+#   ✓ Plugins: git, docker, docker-compose, sudo, history
+#   ✓ Custom Motd (Login-Banner mit System-Info)
+#   ✓ Zsh als Standard-Shell
+#
+# 🎨 CUSTOM MOTD (Message of the Day):
+#   ✓ Hostname, Öffentliche IP, Tailscale IP
+#   ✓ System-Status (Uptime, Load, Memory, Disk)
+#   ✓ Docker Container-Status
+#   ✓ Komodo & Tailscale Status mit Farben
+#
+# 📋 UNTERSTÜTZTE DISTRIBUTIONEN:
+#   ✓ Ubuntu 20.04+, 22.04+, 24.04+
+#   ✓ Debian 10+, 11+, 12+
+#   ✓ CentOS 7+, 8+
+#   ✓ RHEL 7+, 8+, 9+
+#   ✓ Rocky Linux 8+, 9+
+#   ✓ AlmaLinux 8+, 9+
+#   ✓ Fedora 35+
+#   ✓ openSUSE Leap 15+
+#   ✓ Arch Linux
+#
+# 🔧 SCRIPT-FEATURES:
+#   ✓ Modulare Auswahl (nur gewünschte Features)
+#   ✓ Idempotenz (mehrfach ausführbar)
+#   ✓ Dry-Run-Modus (testen ohne Änderungen)
+#   ✓ Debug-Modus (ausführliche Ausgaben)
+#   ✓ Automatische Backups vor Änderungen
+#   ✓ Error-Recovery & Retry-Mechanismen
+#   ✓ Ausführliches Logging (/var/log/server-setup.log)
+#   ✓ Non-Interactive Mode (für CI/CD)
+#
+# ==============================================================================
+# 📖 VERWENDUNG:
+# ==============================================================================
+#
+# 1. EINFACHE INTERAKTIVE INSTALLATION:
+#    sudo ./setup.sh
+#
+# 2. MIT COMMAND-LINE ARGUMENTEN:
+#    sudo ./setup.sh --help
+#    sudo ./setup.sh --tailscale-key "tskey-xxx" --hostname "myserver" --yes
+#    sudo ./setup.sh --komodo-path "/srv/komodo" --ssh-port 2222
+#    sudo ./setup.sh --dry-run                    # Test ohne Änderungen
+#    sudo ./setup.sh --debug                      # Mit Debug-Ausgabe
+#
+# 3. MIT UMGEBUNGSVARIABLEN:
+#    TAILSCALE_KEY=tskey-xxx KOMODO_PATH=/srv/komodo sudo ./setup.sh
+#    export TAILSCALE_KEY="tskey-xxx"
+#    export KOMODO_PATH="/opt/komodo"
+#    sudo -E ./setup.sh --yes
+#
+# 4. VOLLAUTOMATISCH (CI/CD):
+#    sudo ./setup.sh \
+#      --tailscale-key "tskey-auth-xxx" \
+#      --komodo-path "/opt/komodo" \
+#      --hostname "prod-server-01" \
+#      --ssh-port 2222 \
+#      --yes
+#
+# ==============================================================================
+# 🔑 VERFÜGBARE OPTIONEN:
+# ==============================================================================
+#
+#   -h, --help              Zeigt diese Hilfe
+#   -d, --debug             Debug-Modus (ausführliche Ausgabe)
+#   -n, --dry-run           Test-Modus (keine echten Änderungen)
+#   -t, --tailscale-key     Tailscale Auth-Key
+#   -k, --komodo-path       Komodo Installationspfad (default: /opt/komodo)
+#   -H, --hostname          Server-Hostname
+#   -p, --ssh-port          SSH-Port (default: 2222)
+#   -y, --yes               Nicht-interaktiver Modus (alle Bestätigungen mit ja)
+#
+# ==============================================================================
+# 🔒 SICHERHEITSHINWEISE:
+# ==============================================================================
+#
+# NACH DEM SETUP:
+#   1. SSH-Key auf lokalen Rechner kopieren (vor Root-Sperre!)
+#   2. Neue SSH-Verbindung testen (mit neuem Port!)
+#   3. Erst dann alte Verbindung schließen
+#   4. Tailscale-Key in sicherer Password-Manager speichern
+#   5. Komodo-Passkey notieren und im Komodo-Server eintragen
+#   6. Regelmäßige Backups einrichten
+#
+# FIREWALL-PORTS:
+#   - SSH: Konfigurierter Port (default 2222)
+#   - Komodo: 8120 (nur über Tailscale)
+#   - Tailscale: Interface komplett freigegeben
+#
+# ==============================================================================
+# 📝 VERSION & LICENSE:
+# ==============================================================================
+# Version: 3.0
+# Repository: https://github.com/sunsideofthedark-lgtm/setup
+# Author: Server Setup Script
+# License: MIT
 # ==============================================================================
 
 # --- Globale Variablen ---
