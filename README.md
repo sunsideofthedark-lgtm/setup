@@ -2,6 +2,8 @@
 
 Ein umfassendes, modulares Setup-Skript für die sichere Ersteinrichtung von Linux-Servern mit automatischer Konfiguration von Tailscale VPN, Komodo Periphery und modernen CLI-Tools.
 
+**🔗 GitHub Repository:** [https://github.com/sunsideofthedark-lgtm/setup](https://github.com/sunsideofthedark-lgtm/setup)
+
 ## ✨ Features
 
 ### 🔐 Sicherheit
@@ -99,11 +101,13 @@ curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/
 - ✅ Perfekt für Terraform, Ansible, Cloud-Init
 - ✅ Alle Parameter durchreichbar
 
+> **💡 Hinweis:** Die URLs verwenden aktuell den Branch `claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom`. Wenn du das Repository später in einen `main`-Branch mergst, werden die URLs kürzer und einfacher!
+
 ### Einfache Ausführung
 
 ```bash
 # Repository klonen oder herunterladen
-git clone <repository-url>
+git clone https://github.com/sunsideofthedark-lgtm/setup.git
 cd setup
 
 # Als root/sudo ausführen

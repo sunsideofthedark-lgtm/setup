@@ -5,13 +5,13 @@
 # Lädt das Setup-Script direkt aus dem GitHub-Repository und führt es aus.
 #
 # Verwendung:
-#   curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | bash
 #
 #   # Mit Parametern:
-#   curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/main/install.sh | bash -s -- --tailscale-key "tskey-xxx" --yes
+#   curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/claude/universal-linux-server-setup-011CUW7zdaGyhroSxEM7xPom/install.sh | bash -s -- --tailscale-key "tskey-xxx" --yes
 #
 #   # Anderen Branch verwenden:
-#   curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/BRANCH/install.sh | bash
+#   BRANCH=other-branch curl -fsSL https://raw.githubusercontent.com/sunsideofthedark-lgtm/setup/BRANCH/install.sh | bash
 
 set -euo pipefail
 
